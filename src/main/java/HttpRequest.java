@@ -1,3 +1,4 @@
+import java.io.ByteArrayInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,30 +12,27 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Supplier;
 
 public class HttpRequest {
     public Builder builder;
 
-    private HttpRequest() {
+    HttpRequest() {
+    }
+
+    public URI uri() {
+        return builder.uri;
     }
 
     public HttpURLConnection getConnection() throws IOException {
         URL url = builder.uri.toURL();
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
+        System.out.println(con);
         con.setRequestMethod(builder.method);
         con.setRequestProperty("host", url.toString());
-        for (Map.Entry<String, String> entry : builder.headers.entrySet()) {
-            System.out.println(entry.getKey() + " : " + entry.getValue());
-            con.setRequestProperty(entry.getKey(), entry.getValue());
-        }
 
         if (!builder.method.equals("GET")) {
             con.setDoOutput(true);
             DataOutputStream out = new DataOutputStream(con.getOutputStream());
-            out.write(builder.bodyPublisher.body);
-            out.flush();
-            out.close();
         }
 
         return con;
@@ -54,13 +52,13 @@ public class HttpRequest {
     public static class Builder {
         public URI uri;
 
-        private String method;
+        public String method;
 
         private boolean expectContinue;
 
         Map<String, String> headers = new HashMap<>();
 
-        private BodyPublisher bodyPublisher;
+        BodyPublisher bodyPublisher;
 
         private volatile Optional<HttpClient.Version> version;
 
@@ -128,10 +126,10 @@ public class HttpRequest {
     }
 
     public static class BodyPublisher {
-        private byte[] body;
+        InputStream body;
 
-        private long contentLength() {
-            return body.length;
+        long contentLength() throws IOException {
+            return body.readAllBytes().length;
         }
     }
 
@@ -141,37 +139,37 @@ public class HttpRequest {
 
         public static BodyPublisher noBody() {
             BodyPublisher publisher = new BodyPublisher();
-            publisher.body = new byte[0];
+            publisher.body = InputStream.nullInputStream();
 
             return publisher;
         }
 
         public static BodyPublisher ofByteArray(byte[] arr) {
             BodyPublisher publisher = new BodyPublisher();
-            publisher.body = arr;
+            publisher.body = new ByteArrayInputStream(arr);
 
             return publisher;
         }
 
         public static BodyPublisher ofString(String data) {
             BodyPublisher publisher = new BodyPublisher();
-            publisher.body = data.getBytes();
+            publisher.body = new ByteArrayInputStream(data.getBytes());
 
             return publisher;
         }
 
         public static BodyPublisher fromFile(Path path) throws IOException {
             BodyPublisher publisher = new BodyPublisher();
-            publisher.body = Files.readAllBytes(path);
+            publisher.body = Files.newInputStream(path);
 
             return publisher;
         }
 
-        public static BodyPublisher ofInputStream(Supplier<? extends InputStream> inputStream) throws IOException {
+        public static BodyPublisher ofInputStream(InputStream inputStream) {
             BodyPublisher publisher = new BodyPublisher();
-            publisher.body = inputStream.get().readAllBytes();
+            publisher.body = inputStream;
 
             return publisher;
         }
     }
-}
+        }
